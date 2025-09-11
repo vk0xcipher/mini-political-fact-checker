@@ -5,17 +5,11 @@ import wikipediaapi
 import requests
 from bs4 import BeautifulSoup
 import spacy
-
-# --- Setup ---
 api_key = ''
 api = NewsApiClient(api_key=api_key)
-
-# Zero-shot / bias classifier
 classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 candidate_labels = ["left-wing", "right-wing", "neutral"]
-
-# Contradiction/entailment classifier (NLI)
 nli_model = pipeline("text-classification", model="roberta-large-mnli")
 
 wiki = wikipediaapi.Wikipedia(
@@ -25,7 +19,6 @@ wiki = wikipediaapi.Wikipedia(
 
 nlp = spacy.load("en_core_web_sm")
 
-# --- Helper functions ---
 def extract_entities(text):
     doc = nlp(text)
     return list(set([ent.text for ent in doc.ents if ent.label_ in ["PERSON","ORG","GPE","NORP"]]))
@@ -71,7 +64,6 @@ def compute_similarity_and_contradictions(claim, sources):
                 s_emb = embedding_model.encode(s, convert_to_tensor=True)
                 sim = util.cos_sim(claim_emb, s_emb).item()
                 sims.append(sim)
-                # NLI prediction
                 nli_result = nli_model(f"{claim} </s></s> {s}")[0]
                 label = nli_result['label']
                 if label == "CONTRADICTION":
@@ -81,8 +73,6 @@ def compute_similarity_and_contradictions(claim, sources):
     avg_score = sum(sims)/len(sims) if sims else 0.0
     source_snippets.sort(key=lambda x: x[1], reverse=True)
     return avg_score, source_snippets[:3], contradictions
-
-# --- Main pipeline ---
 articles = api.get_everything(
     q="politics OR government OR election OR congress OR president",
     language="en",
@@ -94,11 +84,10 @@ headlines = [a['title'] for a in articles['articles']] if articles['articles'] e
 for headline in headlines:
     print(f"\nHeadline: {headline}")
 
-    # Bias classification
+
     bias_result = classifier(headline, candidate_labels)
     print("Bias classification:", bias_result)
 
-    # Gather sources
     sources = []
     entities = extract_entities(headline) or ["United States government"]
     for e in entities:
@@ -111,7 +100,7 @@ for headline in headlines:
     news_sources = get_related_news(headline)
     if news_sources: sources.append(news_sources)
 
-    # Compute trust + contradictions
+
     trust_score, top_snippets, contradictions = compute_similarity_and_contradictions(headline, sources)
     print(f"Average claim-source similarity (trust score): {trust_score:.2f}")
 
